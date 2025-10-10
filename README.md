@@ -10,7 +10,7 @@ Proyek ini akan menampilkan delapan SQL Query.
 | query.php | Menjalankan query sesuai pilihan dan menampilkan hasil |
 
 # 📸 SCREENSHOT
-![image alt](https://github.com/AdeeM03/proyek-query-dengan-php/blob/f7c6d992693b05a42ff4a8841573ab6856bd7326/Image/IMG1.png)
+
 ![image alt](https://github.com/AdeeM03/proyek-query-dengan-php/blob/f7c6d992693b05a42ff4a8841573ab6856bd7326/Image/IMG2.png)
 ![image alt](https://github.com/AdeeM03/proyek-query-dengan-php/blob/f7c6d992693b05a42ff4a8841573ab6856bd7326/Image/IMG3.png)
 ![image alt](https://github.com/AdeeM03/proyek-query-dengan-php/blob/f7c6d992693b05a42ff4a8841573ab6856bd7326/Image/IMG4.png)
