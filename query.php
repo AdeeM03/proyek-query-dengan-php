@@ -1,7 +1,10 @@
 <?php
-include 'db.php';
+require_once "db.php";
 
-$id = isset($_GET['id']) ? $_GET['id'] : '';
+$id = $_GET['id'] ?? '';
+$action = $_GET['action'] ?? '';
+$table = $_GET['table'] ?? '';
+$record_id = $_GET['record_id'] ?? '';
 
 $queries = [
     1 => "SELECT A.NomorPesanan, JenisProduk, JmlPesanan, Kelompok, SUM(Jumlah) AS JumlahBiaya
@@ -45,36 +48,138 @@ $queries = [
           LIMIT 3"
 ];
 
-if (!isset($queries[$id])) {
-    die("Query tidak ditemukan.");
+function inputType($type) {
+    $type = strtolower($type);
+    if (str_contains($type, 'int') || str_contains($type, 'decimal') || str_contains($type, 'float')) {
+        return 'number';
+    } elseif (str_contains($type, 'date')) {
+        return 'date';
+    } else {
+        return 'text';
+    }
 }
 
-$stmt = $pdo->query($queries[$id]);
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-?>
+if ($action && $table) {
+    $columns = [];
+    $stmt = $pdo->query("DESCRIBE $table");
+    while ($col = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $columns[] = $col;
+    }
+    $pk = $columns[0]['Field'];
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Hasil Query <?php echo $id; ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-<div class="container mt-4">
-    <a href="index.php" class="btn btn-secondary mb-3">⬅ Kembali</a>
-    <div class="card shadow p-3">
-        <h4 class="mb-3 text-center">Hasil Query <?php echo $id; ?></h4>
-        <div class="table-responsive">
-            <table class="table table-bordered table-striped">
-                <thead class="table-dark">
+    if ($action === 'add') {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $fields = array_column($columns, 'Field'); // include all fields
+            $placeholders = implode(",", array_fill(0, count($fields), "?"));
+            $sql = "INSERT INTO $table (" . implode(",", $fields) . ") VALUES ($placeholders)";
+            $stmt = $pdo->prepare($sql);
+            $values = [];
+            foreach ($fields as $f) {
+                $values[] = $_POST[$f] ?? null;
+            }
+            $stmt->execute($values);
+            header("Location: index.php?msg=added");
+            exit;
+        }
+
+        echo "<!DOCTYPE html><html lang='en'><head>
+        <meta charset='UTF-8'><title>Add Record</title>
+        <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' rel='stylesheet'>
+        </head><body class='bg-light'><div class='container mt-4'>
+        <h3 class='mb-3 text-success'>Add New Record to $table</h3>
+        <form method='POST' class='border p-4 bg-white rounded shadow-sm'>";
+        foreach ($columns as $col) {
+            $colName = $col['Field'];
+            $type = inputType($col['Type']);
+            echo "<div class='mb-3'>
+                    <label class='form-label'>$colName</label>
+                    <input type='$type' class='form-control' name='$colName' required>
+                  </div>";
+        }
+        echo "<button type='submit' class='btn btn-success'>Save</button>
+              <a href='index.php' class='btn btn-secondary ms-2'>Cancel</a></form></div></body></html>";
+        exit;
+    }
+
+    elseif ($action === 'edit' && $record_id) {
+        $stmt = $pdo->prepare("SELECT * FROM $table WHERE $pk=?");
+        $stmt->execute([$record_id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            header("Location: index.php?msg=notfound");
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $fields = array_column(array_slice($columns, 1), 'Field');
+            $set = implode(",", array_map(fn($f) => "$f=?", $fields));
+            $sql = "UPDATE $table SET $set WHERE $pk=?";
+            $stmt = $pdo->prepare($sql);
+            $values = [];
+            foreach ($fields as $f) {
+                $values[] = $_POST[$f] ?? null;
+            }
+            $values[] = $_GET['record_id']; 
+            $stmt->execute($values);
+            header("Location: index.php?msg=updated");
+            exit;
+        }
+
+        echo "<!DOCTYPE html><html lang='en'><head>
+        <meta charset='UTF-8'><title>Edit Record</title>
+        <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' rel='stylesheet'>
+        </head><body class='bg-light'><div class='container mt-4'>
+        <h3 class='mb-3 text-warning'>Edit Record in $table</h3>
+        <form method='POST' class='border p-4 bg-white rounded shadow-sm'>";
+        foreach ($columns as $col) {
+            $colName = $col['Field'];
+            $type = inputType($col['Type']);
+            $value = htmlspecialchars($row[$colName] ?? '');
+            echo "<div class='mb-3'>
+                    <label class='form-label'>$colName</label>
+                    <input type='$type' class='form-control' name='$colName' value='$value' required>
+                  </div>";
+        }
+        echo "<button type='submit' class='btn btn-warning'>Update</button>
+              <a href='index.php' class='btn btn-secondary ms-2'>Cancel</a></form></div></body></html>";
+        exit;
+    }
+
+    elseif ($action === 'delete' && $record_id) {
+        $stmt = $pdo->prepare("DELETE FROM $table WHERE $pk=?");
+        $stmt->execute([$record_id]);
+        header("Location: index.php?msg=deleted");
+        exit;
+    }
+}
+
+if ($id && isset($queries[$id])) {
+    $stmt = $pdo->query($queries[$id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Hasil Query <?php echo $id; ?></title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-light">
+    <div class="container mt-4">
+        <a href="index.php" class="btn btn-secondary mb-3">⬅ Kembali</a>
+        <div class="card shadow p-3">
+            <h4 class="mb-3 text-center">Hasil Query <?php echo $id; ?></h4>
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
                     <tr>
                         <?php foreach (array_keys($rows[0]) as $col): ?>
                             <th><?= htmlspecialchars($col) ?></th>
                         <?php endforeach; ?>
                     </tr>
-                </thead>
-                <tbody>
+                    </thead>
+                    <tbody>
                     <?php foreach ($rows as $row): ?>
                         <tr>
                             <?php foreach ($row as $value): ?>
@@ -82,10 +187,17 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <?php endforeach; ?>
                         </tr>
                     <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
-</div>
-</body>
-</html>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+echo "<div class='alert alert-warning text-center mt-5'>⚠ No valid query or table action provided.</div>";
+echo "<div class='text-center'><a href='index.php' class='btn btn-secondary mt-3'>← Back</a></div>";
+?>
